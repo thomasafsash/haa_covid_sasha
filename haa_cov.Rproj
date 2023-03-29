@@ -1,13 +1,177 @@
-Version: 1.0
+##############HAA and COVID Severity####################################
+#Install packages and call libraries#
+#install.packages("dplyr")
+#install.packages('readr')
+#install.packages("tidycensus")
+#install.packages("tidyverse")
+library(dplyr)
+library(readr)
+library(lubridate)
+library(tidycensus)
+library(tidyverse)
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
+#Read in data, remove spaces in variable names#
+COVIDNY <- read.csv('COVIDNY.csv') %>%
+  janitor::clean_names()%>%
+  dplyr::mutate(as_of_date=as.Date(as_of_date,format="%m/%d/%Y"))%>%
+  dplyr::mutate(year=year(as_of_date))
+View(COVIDNY)
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
 
-RnwWeave: Sweave
-LaTeX: pdfLaTeX
+HAAdata <- read.csv("C:/Users/admin/Downloads/HAAdata.csv")
+View(HAAdata)
+str(COVIDNY)
+
+#Combine max county#
+HAAdata$Max_N <- ifelse(HAAdata$max == "ND", 0, as.numeric(HAAdata$max))
+summary(HAAdata$Max_N)
+
+#Combine mean county#
+HAAdata$Mean_N <- ifelse(HAAdata$mean == "ND", 0, as.numeric(HAAdata$mean))
+summary(HAAdata$Mean_N)
+
+#create a total#
+HAAdata$total <- HAAdata$Mean_N*HAAdata$NumSamples
+
+#separate by year#
+HAA2020 <- subset(HAAdata, subset = SummaryTimePeriod == 2020)
+HAA2020Population <- aggregate(Population ~ county, data = HAA2020, FUN = sum)
+HAA2020NumSamples <- aggregate(NumSamples ~ county, data = HAA2020, FUN = sum)
+HAA2020NumNonDetects <- aggregate(NumNonDetects ~ county, data = HAA2020, FUN = sum)
+HAA2020Max <- aggregate(Max_N ~ county, data = HAA2020, FUN = max)
+HAA2020total <- aggregate(total ~ county, data = HAA2020, FUN = sum)
+
+HAA2021 <- subset(HAAdata, subset = SummaryTimePeriod == 2021)
+HAA2021Population <- aggregate(Population ~ county, data = HAA2021, FUN = sum)
+HAA2021NumSamples <- aggregate(NumSamples ~ county, data = HAA2021, FUN = sum)
+HAA2021NumNonDetects <- aggregate(NumNonDetects ~ county, data = HAA2021, FUN = sum)
+HAA2021Max <- aggregate(Max_N ~ county, data = HAA2021, FUN = max)
+HAA2021total <- aggregate(total ~ county, data = HAA2021, FUN = sum)
+
+#put variables into separate datasets by year#
+tmp <- merge(HAA2020Population, HAA2020NumSamples, by = "county")
+tmp <- merge(tmp, HAA2020NumNonDetects, by = "county")
+tmp <- merge (tmp, HAA2020Max, by = "county")
+HAA2020counties <- merge(tmp, HAA2020total, by = "county")
+HAA2020counties$mean <- HAA2020counties$total/HAA2020counties$NumSamples
+
+summary(HAA2020counties)
+
+tmp <- merge(HAA2021Population, HAA2021NumSamples, by = "county")
+tmp <- merge(tmp, HAA2021NumNonDetects, by = "county")
+tmp <- merge (tmp, HAA2021Max, by = "county")
+HAA2021counties <- merge(tmp, HAA2021total, by = "county")
+HAA2021counties$mean <- HAA2021counties$total/HAA2021counties$NumSamples
+
+summary(HAA2021counties)
+View(HAA2020counties)
+
+##### Make a map of HAA
+library(sf)
+library(tmap)
+ny <- st_read("Data/New York/Counties_Shoreline.shp")
+ny <- ny %>% 
+  dplyr::left_join(HAA2020counties %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(ny) +
+  tm_fill("mean")
+ny <- ny %>% 
+  dplyr::left_join(HAA2021counties %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(ny) +
+  tm_fill("mean")
+
+##### Make a map of Covid 2020
+co20 <- co20 %>% 
+  dplyr::left_join(covid20 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co20) +
+  tm_fill("patients_currently_hospitalized")
+co20 <- co20 %>% 
+  dplyr::left_join(covid20 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co20) +
+  tm_fill("patients_admitted_due_to_covid")
+co20 <- co20 %>% 
+  dplyr::left_join(covid20 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co20) +
+  tm_fill("patients_currently_in_icu")
+co20 <- co20 %>% 
+  dplyr::left_join(covid20 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co20) +
+  tm_fill("patients_currently_icu_intubated")
+co20 <- co20 %>% 
+  dplyr::left_join(covid20 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co20) +
+  tm_fill("patients_expired")
+
+##### Make a map of Covid 2021
+co21 <- co21 %>% 
+  dplyr::left_join(covid21 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co21) +
+  tm_fill("patients_currently_hospitalized")
+co21 <- co21 %>% 
+  dplyr::left_join(covid21 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co21) +
+  tm_fill("patients_admitted_due_to_covid")
+co21 <- co21 %>% 
+  dplyr::left_join(covid21 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co21) +
+  tm_fill("patients_currently_in_icu")
+co21 <- co21 %>% 
+  dplyr::left_join(covid21 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co21) +
+  tm_fill("patients_currently_icu_intubated")
+co21 <- co21 %>% 
+  dplyr::left_join(covid21 %>% dplyr::rename(NAME = county), by = "NAME")
+tm_shape(co21) +
+  tm_fill("patients_expired")
+
+#separate by year#
+COVID2020 <- COVIDNY %>% 
+  dplyr::filter(year==2020)
+COVID2021 <- COVIDNY %>% 
+  dplyr::filter(year==2021)
+
+#Seperate by variable#
+covid20hosp <- aggregate(patients_currently_hospitalized ~ facility_county, data = COVID2020, FUN = sum)
+covid20icu <- aggregate(patients_currently_in_icu ~ facility_county, data = COVID2020, FUN = sum)
+covid20int <- aggregate(patients_currently_icu_intubated ~ facility_county, data = COVID2020, FUN = sum)
+covid20exp <- aggregate(patients_expired ~ facility_county, data = COVID2020, FUN = sum)
+
+covid21hosp <- aggregate(patients_currently_hospitalized ~ facility_county, data = COVID2021, FUN = sum)
+covid21icu <- aggregate(patients_currently_in_icu ~ facility_county, data = COVID2021, FUN = sum)
+covid21int <- aggregate(patients_currently_icu_intubated ~ facility_county, data = COVID2021, FUN = sum)
+covid21exp <- aggregate(patients_expired ~ facility_county, data = COVID2021, FUN = sum)
+
+#put variables into separate datasets by year#
+tmp2 <- merge(covid20hosp, covid20icu, by = "facility_county")
+tmp2 <- merge(tmp2, covid20int, by = "facility_county")
+covid20counties <- merge (tmp2, covid20exp, by = "facility_county")
+county <- covid20counties$facility_county
+
+tmp2 <- merge(covid21hosp, covid21icu, by = "facility_county")
+tmp2 <- merge(tmp2, covid21int, by = "facility_county")
+covid21counties <- merge (tmp2, covid21exp, by = "facility_county")
+county <- covid21counties$facility_county
+
+#Merge Datasets by County#
+covid20 <- merge(covid20counties, FIPS, by = "facility_county")
+haa20 <- merge(HAA2020counties, FIPS, by = "county")
+covid21 <- merge(covid21counties, FIPS, by = "facility_county")
+haa21 <- merge(HAA2021counties, FIPS, by = "county")
+haa_covid20 <- merge(covid20, haa20, by = "FIPS")
+haa_covid21 <- merge(covid21, haa21, by = "FIPS")
+
+#Run correlation matrices#
+Cor20 = cor(haa_covid20[, c(3, 4, 5, 6, 12, 13, 14)])
+cor21 = cor(haa_covid21[, c(3, 4, 5, 6, 12, 13, 14)])
+
+#Run a linear regression between severity variables and HAA Max#
+lmExp20 <- lm(patients_expired ~ Max_N, data = haa_covid20)
+summary(lmExp20)
+lmInt20 <- lm(patients_currently_icu_intubated ~ Max_N, data = haa_covid20)
+summary(lmInt20)
+lmICU20 <- lm(patients_currently_in_icu ~ Max_N, data = haa_covid20)
+summary(lmICU20)
+lmHosp20 <- lm(patients_currently_hospitalized ~ Max_N, data = haa_covid20)
+summary(lmHosp20)
+
+usethis::create_github_token()
+gitcreds::gitcreds_set(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)
